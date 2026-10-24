@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Pulse ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#A77BFF"
+        android:strokeWidth="3"
+        android:pathData="M54,28a26,26 0,1 1,0 52a26,26 0,1 1,0 -52z" />
+    <!-- Sound bars -->
+    <path android:fillColor="#FF5C8A" android:pathData="M38,49h5v10h-5z" />
+    <path android:fillColor="#FF5C8A" android:pathData="M46,42h5v24h-5z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M54,36h5v36h-5z" />
+    <path android:fillColor="#A77BFF" android:pathData="M62,44h5v20h-5z" />
+    <path android:fillColor="#A77BFF" android:pathData="M70,50h5v8h-5z" />
+</vector>

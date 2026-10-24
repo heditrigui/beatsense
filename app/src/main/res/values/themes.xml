@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.BeatSense" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+    <color name="bg">#0C0A12</color>
+    <color name="ic_bg">#140F22</color>
+</resources>
