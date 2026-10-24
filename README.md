@@ -1,6 +1,10 @@
 # BeatSense
 
-Hold up your phone and hear the tempo. BeatSense listens to music through the microphone and tells you its **BPM** within a few seconds.
+Hold up your phone and hear the tempo. BeatSense listens to music through the microphone and tells you its **BPM** within a few seconds. A free, open-source BPM counter, tap tempo and metronome for DJs, musicians and dancers.
+
+**Try it:** grab the APK from the [latest release](../../releases/latest).
+
+<p align="center"><img src="docs/screenshot.jpg" width="280" alt="BeatSense showing 120 BPM on the pulsing dial"></p>
 
 - **Live BPM detection** that locks in within about 6 seconds on songs with drums, with a pulsing dial that beats in time with the music
 - **Tempo range** (Slow 60–120, Normal 80–160, Fast 110–220) plus **½× / 2×** buttons to fix the classic "is it 64 or 128?" ambiguity
