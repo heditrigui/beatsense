@@ -2,7 +2,7 @@
 
 Hold up your phone and hear the tempo. BeatSense listens to music through the microphone and tells you its **BPM** within a few seconds. A free, open-source BPM counter, tap tempo and metronome for DJs, musicians and dancers.
 
-**Try it:** open the **web app** in your browser (the GitHub Pages link in the **About** box), or grab the Android APK from the [latest release](../../releases/latest). No music nearby? The web app has a demo beat.
+**Try it:** open the **[web app](https://heditrigui.github.io/beatsense/)** in your browser, or grab the Android APK from the [latest release](../../releases/latest). No music nearby? The web app has a demo beat.
 
 <p align="center"><img src="docs/screenshot.jpg" width="280" alt="BeatSense showing 120 BPM on the pulsing dial"></p>
 
@@ -24,7 +24,7 @@ Everything runs on your device. The audio is analysed in memory and never record
 
 ## Web app
 
-The same BeatSense runs in the browser on phones, tablets and computers: Chrome, Edge, Firefox and Safari. Open the GitHub Pages site of this repository (link in the **About** box) and allow the microphone.
+The same BeatSense runs in the browser on phones, tablets and computers: Chrome, Edge, Firefox and Safari. Open **[https://heditrigui.github.io/beatsense/](https://heditrigui.github.io/beatsense/)** and allow the microphone.
 
 - **Same detector** as the Android app, ported line by line to JavaScript ([`docs/tempo.js`](docs/tempo.js)) and checked against the same synthetic drum-loop tests
 - **Same features:** live BPM, tempo ranges and ½× / 2×, tap tempo (button or the **T** key), metronome, and saved tempos (kept in your browser)
