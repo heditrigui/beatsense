@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BeatSense</title>
+<meta name="description" content="Free BPM counter in your browser: hold up your device and BeatSense hears the tempo of the music. Tap tempo and metronome included.">
+<meta name="theme-color" content="#0C0A12">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --violet: #A77BFF; --pink: #FF5C8A; --cyan: #4FD8EB; --green: #3DDC97; --amber: #FFB547;
+    --bg: #0C0A12; --card: #16131F; --card2: #211C2E; --muted: #9A93AD; --text: #EDE9F5;
+    --gradient: linear-gradient(120deg, var(--violet), var(--pink));
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         -webkit-tap-highlight-color: transparent; }
+  main { max-width: 480px; margin: 0 auto; padding: 16px 16px 32px; display: flex; flex-direction: column; gap: 16px; }
+  header { display: flex; align-items: center; }
+  header div { flex: 1; }
+  h1 { margin: 0; font-size: 24px; font-weight: 800; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  button { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--card2);
+           border-radius: 14px; cursor: pointer; user-select: none; }
+  button:disabled { color: rgba(154,147,173,.5); cursor: default; }
+  .icon-btn { width: 44px; height: 44px; border: none; background: none; font-size: 22px; border-radius: 50%; }
+  .icon-btn:hover { background: var(--card); }
+
+  .dial { position: relative; width: 270px; height: 270px; align-self: center; }
+  .dial canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .dial .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #bpm { font-size: 84px; font-weight: 900; line-height: 1; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
+  #bpm.none { color: var(--muted); }
+  .bpm-label { font-size: 16px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+  .badge { margin-top: 6px; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 99px; }
+  .badge:empty { display: none; }
+  #clarity { font-size: 11px; color: var(--muted); margin-top: 6px; min-height: 14px; }
+  #hint { text-align: center; color: var(--muted); min-height: 21px; margin-top: -6px; }
+
+  .card { background: var(--card); border-radius: 20px; padding: 14px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .grow { flex: 1; }
+  .meter { width: 70px; height: 6px; border-radius: 3px; background: var(--card2); overflow: hidden; }
+  .meter div { height: 100%; width: 0; background: var(--green); transition: width .12s; }
+  #viz { width: 100%; height: 70px; display: block; margin-top: 10px; }
+  #message { text-align: center; min-height: 21px; }
+  #message a { color: var(--violet); }
+
+  .big { height: 64px; border-radius: 32px; border: 1px solid transparent; background: var(--gradient);
+         font-size: 20px; font-weight: 700; width: 100%; }
+  .big.listening { background: var(--card2); border-color: var(--pink); }
+  .demo { height: 44px; border-radius: 22px; width: 100%; color: var(--text); }
+  .demo.on { border-color: var(--cyan); }
+  .actions { display: grid; grid-template-columns: 1fr 1fr 1.4fr 1.4fr; gap: 8px; }
+  .actions button, .ranges button { height: 44px; font-size: 13px; }
+  .active { background: rgba(167,123,255,.22); border-color: var(--violet); color: #fff; }
+  .ranges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0; }
+
+  .tap { width: 76px; height: 76px; border-radius: 50%; border: none; background: var(--gradient);
+         font-size: 18px; font-weight: 900; flex: none; transition: transform .06s; }
+  .tap:active { transform: scale(.93); }
+  .link { background: none; border: none; color: var(--violet); padding: 4px 0 0; font-size: 13px; }
+
+  footer { text-align: center; font-size: 13px; color: var(--muted); }
+  footer a { color: var(--violet); }
+
+  dialog { background: var(--card); color: var(--text); border: 1px solid var(--card2); border-radius: 20px;
+           padding: 20px; width: min(420px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog h3 { margin: 0 0 12px; font-size: 20px; }
+  dialog input { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--card2);
+                 border-radius: 12px; padding: 12px; }
+  .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .dialog-buttons button { padding: 8px 16px; border: none; background: none; color: var(--violet); font-weight: 600; }
+  #history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow: auto; }
+  #history-list li { display: flex; align-items: center; gap: 10px; background: var(--card2); border-radius: 16px; padding: 10px 12px; }
+  #history-list .hbpm { font-size: 28px; font-weight: 900; color: var(--violet); width: 58px; }
+  #history-list .hname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #history-list button { border: none; background: none; font-size: 20px; width: 40px; height: 40px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>BeatSense</h1>
+      <div class="muted small">Hold up your device, hear the tempo</div>
+    </div>
+    <button class="icon-btn" id="history-btn" title="Saved tempos" aria-label="Saved tempos">🕘</button>
+  </header>
+
+  <div class="dial" id="dial">
+    <canvas id="dial-canvas" width="540" height="540"></canvas>
+    <div class="center" id="dial-center">
+      <div id="bpm" class="none">– –</div>
+      <div class="bpm-label">BPM</div>
+      <div class="badge" id="badge"></div>
+      <div id="clarity"></div>
+    </div>
+  </div>
+  <div id="hint"></div>
+
+  <div class="card">
+    <div class="row">
+      <span class="muted small grow">Rhythm</span>
+      <span class="muted" style="font-size:11px">Mic</span>
+      <div class="meter"><div id="level"></div></div>
+    </div>
+    <canvas id="viz" width="900" height="140"></canvas>
+  </div>
+
+  <div id="message"></div>
+
+  <button class="big" id="listen">🎤&nbsp; Listen</button>
+  <button class="demo" id="demo">🥁&nbsp; No music nearby? Try a demo beat</button>
+
+  <div class="actions">
+    <button id="halve" disabled>½×</button>
+    <button id="double" disabled>2×</button>
+    <button id="save" disabled>💾 Save</button>
+    <button id="click">🔊 Click</button>
+  </div>
+
+  <div>
+    <h2>Expected tempo range</h2>
+    <div class="ranges" id="ranges"></div>
+    <p class="muted small" style="margin:8px 0 0">A song can feel like 64 or 128. Pick the range you expect, or fix it with ½× / 2×.</p>
+  </div>
+
+  <div class="card row" style="padding:14px">
+    <div class="grow">
+      <div style="font-weight:600">Tap tempo</div>
+      <div class="muted small" id="tap-text">Tap along with the beat (or press T)</div>
+      <button class="link" id="tap-reset" hidden>Reset</button>
+    </div>
+    <button class="tap" id="tap">TAP</button>
+  </div>
+
+  <p class="muted small" style="text-align:center;margin:0">Tip: put the device 30 cm to 1 m from the speaker. Songs with drums lock in within about 6 seconds. Audio stays on your device: nothing is recorded or uploaded.</p>
+
+  <footer id="footer">Also available as an Android app. Open source, MIT license.</footer>
+</main>
+
+<dialog id="save-dialog">
+  <form method="dialog">
+    <h3>Save this tempo</h3>
+    <input id="save-name" maxlength="60" placeholder="Song name (optional)" autocomplete="off">
+    <div class="dialog-buttons">
+      <button type="button" id="save-cancel">Cancel</button>
+      <button value="save" id="save-confirm">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="history-dialog">
+  <h3>Saved tempos</h3>
+  <ul id="history-list"></ul>
+  <p class="muted" id="history-empty">Nothing saved yet. Measure a song and tap 💾 Save.</p>
+  <div class="dialog-buttons"><button id="history-close">Close</button></div>
+</dialog>
+
+<script src="tempo.js"></script>
+<script>
+'use strict';
+const { TempoDetector, TapTempo, tempoName, genreHint, drumLoop, PATTERNS } = window.BeatSense;
+const $ = (id) => document.getElementById(id);
+
+const RANGES = [
+  { key: 'slow', label: 'Slow 60–120', low: 60, high: 120 },
+  { key: 'normal', label: 'Normal 80–160', low: 80, high: 160 },
+  { key: 'fast', label: 'Fast 110–220', low: 110, high: 220 },
+];
+
+// Same state as the Android app's UiState.
+const state = {
+  listening: false,
+  source: null,          // 'mic' | 'demo'
+  level: 0,
+  detectedBpm: null,     // smoothed tempo from the detector, before the ½× / 2× correction
+  locked: false,
+  confidence: 0,
+  beatAnchor: 0,         // performance.now() of a recent detected beat
+  beatPeriod: 0,         // seconds, before the multiplier
+  envelope: [],
+  range: RANGES[1],
+  multiplier: 1,
+  tapBpm: null,
+  tapCount: 0,
+  settle: 0,
+  message: '',
+  demoBpm: null,
+  history: loadHistory(),
+};
+const bpm = () => (state.detectedBpm == null ? null : state.detectedBpm * state.multiplier);
+
+let ctx = null;
+function audio() {
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  return ctx;
+}
+
+// ---- Listening -------------------------------------------------------------
+
+let detector = null, stream = null, sourceNode = null, proc = null, loop = null, wakeLock = null;
+let recent = [], startedAt = 0, quietSince = 0;
+
+async function start(source) {
+  if (state.listening) stop();
+  if (metro.on) stopMetronome();
+  const ac = audio();
+  await ac.resume();
+
+  if (source === 'mic') {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMessage('This browser can’t use the microphone here. Try Chrome, Edge, Firefox or Safari over https.');
+      return;
+    }
+    try {
+      // Voice processing (noise suppression, auto gain) flattens drums: ask for the raw mic.
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+    } catch (e) {
+      setMessage(e.name === 'NotAllowedError'
+        ? 'BeatSense needs the microphone to hear the music. Allow it from the icon in the address bar.'
+        : 'Couldn’t open the microphone. Is another app using it?');
+      return;
+    }
+    sourceNode = ac.createMediaStreamSource(stream);
+  } else {
+    // A drum loop with a known tempo, played out loud and fed straight to the detector.
+    const choices = [[96, 'hipHop'], [104, 'house'], [112, 'house'], [118, 'hipHop'], [124, 'house'], [128, 'house'], [136, 'house'], [145, 'house']];
+    const [demoBpm, pattern] = choices[Math.floor(Math.random() * choices.length)];
+    const seconds = (8 * 4 * 60) / demoBpm; // exactly 8 bars, so the loop point stays on the beat
+    const samples = drumLoop({ bpm: demoBpm, seconds, rate: ac.sampleRate, pattern: PATTERNS[pattern], seed: demoBpm, pad: false });
+    const buffer = ac.createBuffer(1, samples.length, ac.sampleRate);
+    buffer.copyToChannel(samples, 0);
+    sourceNode = ac.createBufferSource();
+    sourceNode.buffer = buffer;
+    sourceNode.loop = true;
+    const volume = ac.createGain();
+    volume.gain.value = 0.7;
+    sourceNode.connect(volume).connect(ac.destination);
+    sourceNode.start();
+    state.demoBpm = demoBpm;
+  }
+
+  detector = new TempoDetector(ac.sampleRate);
+  proc = ac.createScriptProcessor(2048, 1, 1);
+  const mute = ac.createGain();
+  mute.gain.value = 0;
+  sourceNode.connect(proc);
+  proc.connect(mute).connect(ac.destination);
+  proc.onaudioprocess = (e) => detector.feed(e.inputBuffer.getChannelData(0));
+
+  recent = [];
+  startedAt = performance.now();
+  quietSince = 0;
+  Object.assign(state, {
+    listening: true, source, detectedBpm: null, locked: false, settle: 0, confidence: 0, multiplier: 1,
+    envelope: [], message: source === 'mic' ? 'Listening… play some music' : 'Playing a demo beat. Can BeatSense find its tempo?',
+  });
+  loop = setInterval(tick, 250);
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* not supported or not allowed */ }
+  render();
+}
+
+function stop(reason) {
+  if (!state.listening) return;
+  clearInterval(loop);
+  proc.onaudioprocess = null;
+  try { sourceNode.disconnect(); proc.disconnect(); } catch { /* already gone */ }
+  if (state.source === 'demo') sourceNode.stop();
+  stream?.getTracks().forEach((t) => t.stop());
+  stream = null;
+  wakeLock?.release().catch(() => {});
+  wakeLock = null;
+  state.listening = false;
+  state.level = 0;
+  if (reason) state.message = reason;
+  else if (state.source === 'demo') state.message = demoVerdict() || 'Demo stopped.';
+  else if (state.detectedBpm == null) state.message = 'No steady beat found. Try again closer to the speaker.';
+  else if (state.locked) state.message = '';
+  else state.message = 'Stopped before the tempo settled. The result may be rough.';
+  render();
+}
+
+function demoVerdict() {
+  const b = bpm();
+  if (state.demoBpm == null || b == null) return '';
+  const off = Math.abs(b - state.demoBpm);
+  return off <= 1.5
+    ? `The demo beat is ${state.demoBpm} BPM: spot on.`
+    : `The demo beat is ${state.demoBpm} BPM; BeatSense heard ${Math.round(b)}. ${off > 20 ? 'Try ½× / 2× or another range.' : ''}`;
+}
+
+/** Same smoothing and lock rules as the Android app's BpmViewModel.tick(). */
+function tick() {
+  const est = detector.estimate(state.range.low, state.range.high);
+  const env = detector.envelopeSnapshot();
+  const level = detector.level;
+  const now = performance.now();
+  const elapsed = (now - startedAt) / 1000;
+
+  if (level < 0.015) { if (!quietSince) quietSince = now; } else quietSince = 0;
+  const tooQuiet = quietSince && now - quietSince > 2500;
+
+  if (est && est.confidence >= 0.15) {
+    recent.push(est.bpm);
+    if (recent.length > 12) recent.shift();
+  }
+  const smoothed = recent.length ? [...recent].sort((a, b) => a - b)[Math.floor(recent.length / 2)] : null;
+  const last8 = recent.slice(-8);
+  const wasLocked = state.locked;
+  const locked = elapsed >= 6 && last8.length === 8 && Math.max(...last8) - Math.min(...last8) <= 1.5;
+  // Fill the ring as consistent estimates accumulate, not just as time passes.
+  const agreeing = smoothed == null ? 0 : last8.filter((b) => Math.abs(b - smoothed) <= 1.5).length;
+
+  state.level = level;
+  state.detectedBpm = smoothed ?? state.detectedBpm;
+  state.locked = locked;
+  state.settle = locked ? 1 : Math.min(0.95, agreeing / 8);
+  state.confidence = est ? est.confidence : 0;
+  if (est && smoothed != null) state.beatAnchor = now - est.lastBeatAgoSec * 1000;
+  if (smoothed != null) state.beatPeriod = 60 / smoothed;
+  state.envelope = downsample(env, detector.framesPerSecond);
+  state.message =
+    tooQuiet ? 'Too quiet. Hold the device closer to the speaker.'
+    : !est ? 'Listening… (needs about 4 seconds)'
+    : est.confidence < 0.15 ? 'No clear beat yet. Music with drums works best.'
+    : locked ? (state.source === 'demo' ? demoVerdict() : '')
+    : 'Locking on…';
+  if (locked && !wasLocked) navigator.vibrate?.(40);
+
+  // Plenty of time to settle; stop on our own to save battery.
+  if (elapsed > 45) stop();
+  render();
+}
+
+/** The last ~4 seconds of onset strength, squeezed into bars for the visualiser. */
+function downsample(env, fps, bars = 90) {
+  const take = Math.min(env.length, Math.floor(fps * 4));
+  if (take < bars) return [];
+  const start = env.length - take;
+  const out = new Array(bars).fill(0);
+  let peak = 1e-9;
+  for (let b = 0; b < bars; b++) {
+    const from = start + Math.floor((b * take) / bars);
+    const to = start + Math.floor(((b + 1) * take) / bars);
+    for (let i = from; i < to; i++) out[b] = Math.max(out[b], env[i]);
+    peak = Math.max(peak, out[b]);
+  }
+  return out.map((v) => v / peak);
+}
+
+// ---- Metronome (sample-accurate, scheduled on the audio clock) ---------------
+
+const metro = { on: false, bpm: 120, next: 0, count: 0, timer: null, beats: [] };
+
+function startMetronome(at) {
+  if (state.listening) stop();
+  const ac = audio();
+  ac.resume();
+  metro.bpm = Math.min(300, Math.max(30, at));
+  metro.on = true;
+  metro.count = 0;
+  metro.beats = [];
+  metro.next = ac.currentTime + 0.08;
+  clearInterval(metro.timer);
+  metro.timer = setInterval(schedule, 25);
+  schedule();
+  state.message = '';
+  render();
+}
+
+function stopMetronome() {
+  metro.on = false;
+  clearInterval(metro.timer);
+  render();
+}
+
+function schedule() {
+  const ac = audio();
+  while (metro.next < ac.currentTime + 0.12) {
+    click(metro.next, metro.count % 4 === 0);
+    metro.beats.push(metro.next);
+    if (metro.beats.length > 8) metro.beats.shift();
+    metro.next += 60 / metro.bpm;
+    metro.count++;
+  }
+}
+
+function click(t, accent) {
+  const ac = audio();
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.frequency.value = accent ? 2600 : 1800;
+  gain.gain.setValueAtTime(0.67, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+  osc.connect(gain).connect(ac.destination);
+  osc.start(t);
+  osc.stop(t + 0.035);
+}
+
+/** Tempo the metronome should play: the detected one, else the tapped one, else 120. */
+const metronomeBpm = () => bpm() ?? state.tapBpm ?? 120;
+
+function syncMetronome() {
+  if (metro.on) metro.bpm = Math.min(300, Math.max(30, metronomeBpm()));
+}
+
+// ---- Tap tempo, history ------------------------------------------------------
+
+const tapper = new TapTempo();
+function tap() {
+  const b = tapper.tap(performance.now());
+  state.tapBpm = b ?? (tapper.count > 1 ? state.tapBpm : null);
+  state.tapCount = tapper.count;
+  render();
+}
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem('beatsense.history')) || []; } catch { return []; }
+}
+function persist() {
+  try { localStorage.setItem('beatsense.history', JSON.stringify(state.history)); } catch { /* private mode */ }
+}
+function saveTempo(name) {
+  const b = bpm() ?? state.tapBpm;
+  if (b == null) return;
+  state.history.unshift({ id: Date.now(), bpm: Math.round(b * 10) / 10, name: name.trim(), time: Date.now() });
+  persist();
+  renderHistory();
+}
+
+// ---- Rendering -----------------------------------------------------------------
+
+function setMessage(text) { state.message = text; render(); }
+
+function render() {
+  const b = bpm() ?? (metro.on ? metro.bpm : null);
+  const bpmEl = $('bpm');
+  bpmEl.textContent = b == null ? '– –' : Math.round(b);
+  bpmEl.classList.toggle('none', b == null);
+
+  const badge = $('badge');
+  const badges = [
+    [state.locked, '✓ Locked', 'var(--green)'],
+    [state.listening && b != null, 'Settling…', 'var(--amber)'],
+    [metro.on, '🔊 Metronome', 'var(--cyan)'],
+    [b != null && state.multiplier !== 1, `${state.multiplier < 1 ? '÷' + Math.round(1 / state.multiplier) : Math.round(state.multiplier) + '×'} corrected`, 'var(--violet)'],
+  ].find(([on]) => on);
+  badge.textContent = badges ? badges[1] : '';
+  if (badges) { badge.style.color = badges[2]; badge.style.background = `color-mix(in srgb, ${badges[2]} 15%, transparent)`; }
+  $('clarity').textContent = state.listening && b != null ? `Beat clarity ${Math.round(state.confidence * 100)}%` : '';
+  $('hint').textContent = bpm() != null ? `${tempoName(bpm())} · ${genreHint(bpm())}` : '';
+
+  $('level').style.width = `${Math.round(Math.min(1, state.level) * 100)}%`;
+  $('level').style.background = state.level > 0.9 ? 'var(--pink)' : 'var(--green)';
+  drawViz();
+  $('message').textContent = state.message;
+
+  const listen = $('listen');
+  listen.classList.toggle('listening', state.listening && state.source === 'mic');
+  listen.innerHTML = state.listening && state.source === 'mic' ? '■&nbsp; Stop' : '🎤&nbsp; Listen';
+  const demo = $('demo');
+  demo.classList.toggle('on', state.listening && state.source === 'demo');
+  demo.innerHTML = state.listening && state.source === 'demo' ? '■&nbsp; Stop the demo beat' : '🥁&nbsp; No music nearby? Try a demo beat';
+
+  $('halve').disabled = $('double').disabled = bpm() == null;
+  $('save').disabled = bpm() == null && state.tapBpm == null;
+  $('click').textContent = metro.on ? '⏹ Click' : '🔊 Click';
+  $('click').classList.toggle('active', metro.on);
+  for (const btn of $('ranges').children) btn.classList.toggle('active', btn.dataset.key === state.range.key);
+
+  $('tap-text').textContent =
+    state.tapBpm != null ? `${Math.round(state.tapBpm)} BPM from ${state.tapCount} taps`
+    : state.tapCount > 0 ? 'Keep tapping…'
+    : 'Tap along with the beat (or press T)';
+  $('tap-reset').hidden = state.tapCount === 0;
+}
+
+function drawViz() {
+  const c = $('viz'), g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  const bars = state.envelope;
+  if (!bars.length) {
+    g.fillStyle = '#211C2E';
+    g.fillRect(0, c.height / 2 - 2, c.width, 4);
+    return;
+  }
+  const w = c.width / bars.length;
+  const grad = g.createLinearGradient(0, 0, 0, c.height);
+  grad.addColorStop(0, '#FF5C8A');
+  grad.addColorStop(1, '#A77BFF');
+  g.fillStyle = grad;
+  bars.forEach((v, i) => {
+    const h = Math.max(4, v * c.height);
+    g.beginPath();
+    g.roundRect(i * w + w * 0.15, c.height - h, w * 0.7, h, w * 0.3);
+    g.fill();
+  });
+}
+
+// The dial: tempo in the middle, a ring that fills as the estimate settles, and a glow on every beat.
+let ringProgress = 0;
+function drawDial() {
+  const c = $('dial-canvas'), g = c.getContext('2d');
+  const size = c.width, r = size / 2;
+  let pulse = 0;
+  const active = (state.listening && state.detectedBpm != null) || metro.on;
+  if (active) {
+    let since;
+    if (metro.on) {
+      const t = audio().currentTime;
+      const last = metro.beats.filter((x) => x <= t).pop();
+      since = last == null ? 1e9 : (t - last) / (60 / metro.bpm);
+    } else {
+      const period = state.beatPeriod / state.multiplier;
+      since = period > 0 ? (((performance.now() - state.beatAnchor) / 1000 / period) % 1 + 1) % 1 : 1e9;
+    }
+    pulse = Math.exp(-since * 6);
+  }
+  const target = metro.on ? 0 : state.listening ? state.settle : bpm() != null ? 1 : 0;
+  ringProgress += (target - ringProgress) * 0.12;
+
+  g.clearRect(0, 0, size, size);
+  const glow = g.createRadialGradient(r, r, 0, r, r, r * (0.9 + 0.15 * pulse));
+  glow.addColorStop(0, `rgba(255,92,138,${0.35 * pulse + 0.05})`);
+  glow.addColorStop(1, 'rgba(255,92,138,0)');
+  g.fillStyle = glow;
+  g.beginPath(); g.arc(r, r, r, 0, Math.PI * 2); g.fill();
+
+  const stroke = 20, inset = stroke / 2 + 12;
+  g.lineWidth = stroke;
+  g.strokeStyle = '#211C2E';
+  g.beginPath(); g.arc(r, r, r - inset, 0, Math.PI * 2); g.stroke();
+  if (ringProgress > 0.002) {
+    g.strokeStyle = state.locked ? '#3DDC97' : '#A77BFF';
+    g.lineCap = 'round';
+    g.beginPath(); g.arc(r, r, r - inset, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ringProgress); g.stroke();
+  }
+  $('dial-center').style.transform = `scale(${1 + 0.06 * pulse})`;
+  requestAnimationFrame(drawDial);
+}
+
+function renderHistory() {
+  const list = $('history-list');
+  list.innerHTML = '';
+  $('history-empty').hidden = state.history.length > 0;
+  const fmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  for (const m of state.history) {
+    const li = document.createElement('li');
+    const n = document.createElement('div');
+    n.className = 'hbpm'; n.textContent = Math.round(m.bpm);
+    const info = document.createElement('div');
+    info.className = 'grow'; info.style.minWidth = '0';
+    const name = document.createElement('div');
+    name.className = 'hname'; name.textContent = m.name || 'Untitled';
+    const sub = document.createElement('div');
+    sub.className = 'muted small'; sub.textContent = `${tempoName(m.bpm)} · ${fmt.format(new Date(m.time))}`;
+    info.append(name, sub);
+    const play = document.createElement('button');
+    play.textContent = '▶'; play.title = 'Play metronome'; play.setAttribute('aria-label', 'Play metronome');
+    play.onclick = () => { $('history-dialog').close(); startMetronome(m.bpm); };
+    const del = document.createElement('button');
+    del.textContent = '🗑'; del.title = 'Delete'; del.setAttribute('aria-label', 'Delete');
+    del.onclick = () => { state.history = state.history.filter((h) => h.id !== m.id); persist(); renderHistory(); };
+    li.append(n, info, play, del);
+    list.append(li);
+  }
+}
+
+// ---- Wiring ------------------------------------------------------------------------
+
+for (const r of RANGES) {
+  const btn = document.createElement('button');
+  btn.textContent = r.label;
+  btn.dataset.key = r.key;
+  btn.onclick = () => {
+    recent = [];
+    state.range = r;
+    state.multiplier = 1;
+    if (state.detectedBpm != null) state.detectedBpm = TempoDetector.fold(state.detectedBpm, r.low, r.high);
+    syncMetronome();
+    render();
+  };
+  $('ranges').append(btn);
+}
+
+$('listen').onclick = () => (state.listening && state.source === 'mic' ? stop() : start('mic'));
+$('demo').onclick = () => (state.listening && state.source === 'demo' ? stop() : start('demo'));
+$('halve').onclick = () => { state.multiplier = Math.max(0.25, state.multiplier / 2); syncMetronome(); render(); };
+$('double').onclick = () => { state.multiplier = Math.min(4, state.multiplier * 2); syncMetronome(); render(); };
+$('click').onclick = () => (metro.on ? stopMetronome() : startMetronome(metronomeBpm()));
+$('tap').onclick = tap;
+$('tap-reset').onclick = () => { tapper.reset(); state.tapBpm = null; state.tapCount = 0; render(); };
+$('save').onclick = () => { $('save-name').value = ''; $('save-dialog').returnValue = ''; $('save-dialog').showModal(); $('save-name').focus(); };
+// Cancel is a plain button, so pressing Enter in the name field submits with Save.
+$('save-cancel').onclick = () => $('save-dialog').close('cancel');
+$('save-dialog').addEventListener('close', () => { if ($('save-dialog').returnValue === 'save') saveTempo($('save-name').value); });
+$('history-btn').onclick = () => { renderHistory(); $('history-dialog').showModal(); };
+$('history-close').onclick = () => $('history-dialog').close();
+addEventListener('keydown', (e) => {
+  if (e.target.matches('input') || e.repeat || document.querySelector('dialog[open]')) return;
+  if (e.key === 't' || e.key === 'T') { e.preventDefault(); tap(); }
+});
+// Don't keep the microphone open in the background.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && state.listening && state.source === 'mic') stop();
+});
+
+// On GitHub Pages, link to the repository and its Android release (worked out from the address).
+if (location.hostname.endsWith('.github.io')) {
+  const owner = location.hostname.split('.')[0];
+  const repo = location.pathname.split('/').filter(Boolean)[0] || 'beatsense';
+  const base = `https://github.com/${owner}/${repo}`;
+  $('footer').innerHTML = `Also available as an <a href="${base}/releases/latest">Android app</a>. <a href="${base}">Open source</a>, MIT license.`;
+}
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+render();
+requestAnimationFrame(drawDial);
+</script>
+</body>
+</html>
