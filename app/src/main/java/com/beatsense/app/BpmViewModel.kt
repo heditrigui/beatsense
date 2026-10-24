@@ -1,14 +1,14 @@
-package com.hedi.beatsense
+package com.beatsense.app
 
 import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.hedi.beatsense.audio.MicListener
-import com.hedi.beatsense.audio.Metronome
-import com.hedi.beatsense.audio.SAMPLE_RATE
-import com.hedi.beatsense.audio.TapTempo
-import com.hedi.beatsense.dsp.TempoDetector
+import com.beatsense.app.audio.MicListener
+import com.beatsense.app.audio.Metronome
+import com.beatsense.app.audio.SAMPLE_RATE
+import com.beatsense.app.audio.TapTempo
+import com.beatsense.app.dsp.TempoDetector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

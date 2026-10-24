@@ -1,4 +1,4 @@
-package com.hedi.beatsense.ui
+package com.beatsense.app.ui
 
 import android.Manifest
 import android.content.Intent
@@ -75,12 +75,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.hedi.beatsense.BpmViewModel
-import com.hedi.beatsense.Measurement
-import com.hedi.beatsense.TempoRange
-import com.hedi.beatsense.UiState
-import com.hedi.beatsense.genreHint
-import com.hedi.beatsense.tempoName
+import com.beatsense.app.BpmViewModel
+import com.beatsense.app.Measurement
+import com.beatsense.app.TempoRange
+import com.beatsense.app.UiState
+import com.beatsense.app.genreHint
+import com.beatsense.app.tempoName
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale

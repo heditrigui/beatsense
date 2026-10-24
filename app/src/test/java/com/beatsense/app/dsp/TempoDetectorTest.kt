@@ -1,4 +1,4 @@
-package com.hedi.beatsense.dsp
+package com.beatsense.app.dsp
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

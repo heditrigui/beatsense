@@ -1,4 +1,4 @@
-package com.hedi.beatsense.dsp
+package com.beatsense.app.dsp
 
 import kotlin.math.PI
 import kotlin.math.cos

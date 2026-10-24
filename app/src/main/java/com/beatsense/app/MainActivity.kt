@@ -1,4 +1,4 @@
-package com.hedi.beatsense
+package com.beatsense.app
 
 import android.graphics.Color
 import android.os.Bundle
@@ -11,8 +11,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hedi.beatsense.ui.BeatTheme
-import com.hedi.beatsense.ui.BpmScreen
+import com.beatsense.app.ui.BeatTheme
+import com.beatsense.app.ui.BpmScreen
 
 class MainActivity : ComponentActivity() {
     private val vm: BpmViewModel by viewModels()

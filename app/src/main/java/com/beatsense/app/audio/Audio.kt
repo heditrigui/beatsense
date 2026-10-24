@@ -1,4 +1,4 @@
-package com.hedi.beatsense.audio
+package com.beatsense.app.audio
 
 import android.annotation.SuppressLint
 import android.content.Context

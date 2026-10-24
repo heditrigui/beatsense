@@ -1,4 +1,4 @@
-package com.hedi.beatsense.ui
+package com.beatsense.app.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography

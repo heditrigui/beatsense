@@ -18,7 +18,7 @@ Download the APK from the [latest release](../../releases/latest), open it on yo
 
 ## How it works
 
-The detector in [`TempoDetector.kt`](app/src/main/java/com/hedi/beatsense/dsp/TempoDetector.kt) runs in three steps:
+The detector in [`TempoDetector.kt`](app/src/main/java/com/beatsense/app/dsp/TempoDetector.kt) runs in three steps:
 
 1. **Spectral flux**: each 1024-sample FFT frame (about 11 ms apart) is compared with the previous one, and the rises in log energy across all frequencies are summed. Drum hits and note attacks show up as spikes.
 2. **Autocorrelation** of the last 12 seconds of onset strength shows how often the spikes repeat. Harmonics (2× and 3× the period) are added so the real beat beats its subdivisions, and a gentle preference around 120 BPM settles half/double ambiguity. The result is folded into the chosen tempo range and refined on a fine fractional grid.

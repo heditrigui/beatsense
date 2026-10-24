@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.hedi.beatsense"
+    namespace = "com.beatsense.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.hedi.beatsense"
+        applicationId = "com.beatsense.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
