@@ -40,12 +40,17 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -66,17 +71,21 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.beatsense.app.BpmViewModel
+import com.beatsense.app.FileJob
 import com.beatsense.app.Measurement
+import com.beatsense.app.TempoPoint
 import com.beatsense.app.TempoRange
 import com.beatsense.app.UiState
 import com.beatsense.app.genreHint
@@ -94,7 +103,19 @@ fun BpmScreen(vm: BpmViewModel, state: UiState) {
     val view = LocalView.current
     var showHistory by remember { mutableStateOf(false) }
     var showSave by remember { mutableStateOf(false) }
+    var showFiles by remember { mutableStateOf(false) }
     var askedOnce by remember { mutableStateOf(false) }
+
+    // Files are opened through the system picker: no storage permission, and only what the user picks.
+    val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) { vm.analyseFiles(uris); showFiles = true }
+    }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) { vm.analyseFolder(tree); showFiles = true }
+    }
+    val exportCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri != null) vm.exportCsv(uri)
+    }
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         askedOnce = true
@@ -149,6 +170,8 @@ fun BpmScreen(vm: BpmViewModel, state: UiState) {
 
         Visualizer(state)
 
+        TempoHistory(state.tempoCurve, state.listening, state.keepListening) { vm.setKeepListening(it) }
+
         state.message?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
         }
@@ -183,6 +206,15 @@ fun BpmScreen(vm: BpmViewModel, state: UiState) {
 
         TapCard(state, onTap = { vm.tap() }, onReset = { vm.resetTap() })
 
+        FilesCard(
+            state.files,
+            onFiles = { pickFiles.launch(arrayOf("audio/*")) },
+            onFolder = { pickFolder.launch(null) },
+            onShow = { showFiles = true },
+        )
+
+        if (vm.midiAvailable) MidiCard(state, vm)
+
         Text(
             "Tip: put the phone 30 cm – 1 m from the speaker. Songs with drums lock in within ~6 seconds.",
             style = MaterialTheme.typography.bodySmall,
@@ -193,6 +225,17 @@ fun BpmScreen(vm: BpmViewModel, state: UiState) {
     }
 
     if (showSave) SaveDialog(onDismiss = { showSave = false }) { name -> vm.save(name); showSave = false }
+
+    if (showFiles) {
+        ModalBottomSheet(onDismissRequest = { showFiles = false }, containerColor = Beat.Card) {
+            FileResults(
+                state.files,
+                onCancel = { vm.cancelAnalysis() },
+                onExport = { exportCsv.launch("beatsense-results.csv") },
+                onClear = { vm.clearFiles(); showFiles = false },
+            )
+        }
+    }
 
     if (showHistory) {
         ModalBottomSheet(onDismissRequest = { showHistory = false }, containerColor = Beat.Card) {
@@ -249,6 +292,9 @@ private fun PulseDial(state: UiState) {
                 color = if (bpm == null) Beat.Muted else Color.White,
             )
             Text("BPM", style = MaterialTheme.typography.titleMedium, color = Beat.Muted)
+            state.key?.takeIf { state.listening || state.bpm != null }?.let {
+                Text("${it.name} · ${it.camelot}", style = MaterialTheme.typography.titleSmall, color = Beat.Cyan, fontWeight = FontWeight.Bold)
+            }
             Spacer(Modifier.height(6.dp))
             when {
                 state.locked -> Badge("✓ Locked", Beat.Green)
@@ -458,10 +504,211 @@ private fun HistoryList(items: List<Measurement>, onPlay: (Double) -> Unit, onDe
                     )
                     Column(Modifier.weight(1f)) {
                         Text(m.name.ifBlank { "Untitled" }, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                        Text("${tempoName(m.bpm)} · ${fmt.format(Date(m.time))}", style = MaterialTheme.typography.bodySmall, color = Beat.Muted)
+                        Text(
+                            listOf(tempoName(m.bpm), m.key, fmt.format(Date(m.time))).filter { it.isNotBlank() }.joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Beat.Muted,
+                        )
                     }
                     IconButton(onClick = { onPlay(m.bpm) }) { Icon(Icons.Outlined.PlayArrow, "Play metronome") }
                     IconButton(onClick = { onDelete(m.id) }) { Icon(Icons.Outlined.Delete, "Delete", tint = Beat.Muted) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Card(content: @Composable () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Beat.Card)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) { content() }
+}
+
+@Composable
+private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Beat.Muted)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(checkedTrackColor = Beat.Violet, checkedThumbColor = Color.White),
+        )
+    }
+}
+
+private fun clock(sec: Float): String {
+    val s = sec.roundToInt()
+    return "%d:%02d".format(s / 60, s % 60)
+}
+
+/** The tempo over the listening session, for live sets and songs that speed up or slow down. */
+@Composable
+private fun TempoHistory(curve: List<TempoPoint>, listening: Boolean, keepListening: Boolean, onKeepListening: (Boolean) -> Unit) {
+    Card {
+        SwitchRow(
+            "Tempo over time",
+            if (keepListening) "Keeps listening until you stop it" else "Turn on to keep listening past 45 s (live sets)",
+            keepListening,
+            onKeepListening,
+        )
+        if (curve.size < 2) {
+            Text(
+                if (listening) "The graph starts once a tempo is found." else "Listen to see how the tempo moves over time.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Beat.Muted,
+            )
+            return@Card
+        }
+        val lo = curve.minOf { it.bpm }
+        val hi = curve.maxOf { it.bpm }
+        // At least ±4 BPM of headroom, so a steady song draws a calm flat line rather than magnified noise.
+        val mid = (lo + hi) / 2
+        val span = maxOf(8f, (hi - lo) * 1.2f)
+        val t0 = curve.first().timeSec
+        val t1 = maxOf(curve.last().timeSec, t0 + 1)
+        Canvas(Modifier.fillMaxWidth().height(90.dp)) {
+            for (f in listOf(0.25f, 0.5f, 0.75f)) {
+                drawLine(Beat.Card2, Offset(0f, size.height * f), Offset(size.width, size.height * f), strokeWidth = 1.dp.toPx())
+            }
+            val path = Path()
+            curve.forEachIndexed { i, p ->
+                val x = (p.timeSec - t0) / (t1 - t0) * size.width
+                val y = size.height * (0.5f - (p.bpm - mid) / span)
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path, Beat.gradient, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
+        }
+        val avg = curve.map { it.bpm }.average()
+        Text(
+            "%s  ·  avg %.1f  ·  range %.0f–%.0f BPM".format(clock(t1 - t0), avg, lo, hi),
+            style = MaterialTheme.typography.labelMedium,
+            color = Beat.Muted,
+        )
+    }
+}
+
+@Composable
+private fun FilesCard(job: FileJob, onFiles: () -> Unit, onFolder: () -> Unit, onShow: () -> Unit) {
+    Card {
+        Text("Analyse audio files", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "BPM and key of songs on your phone. Pick a few files or a whole folder, then export the results as CSV.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Beat.Muted,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmallAction("🎵 Pick files", Modifier.weight(1f), enabled = !job.running, onClick = onFiles)
+            SmallAction("📁 Folder", Modifier.weight(1f), enabled = !job.running, onClick = onFolder)
+        }
+        if (job.running || job.results.isNotEmpty()) {
+            Text(
+                if (job.running) "Analysing ${job.results.size + 1} of ${maxOf(job.total, 1)}… · Show" else "${job.results.size} analysed · Show results",
+                color = Beat.Violet,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.clickable(onClick = onShow).padding(vertical = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun FileResults(job: FileJob, onCancel: () -> Unit, onExport: () -> Unit, onClear: () -> Unit) {
+    Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Audio files", style = MaterialTheme.typography.headlineSmall)
+        if (job.running) {
+            Text(job.current ?: "", style = MaterialTheme.typography.bodySmall, color = Beat.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            LinearProgressIndicator(progress = { job.progress }, Modifier.fillMaxWidth(), color = Beat.Violet, trackColor = Beat.Card2)
+        }
+        LazyColumn(Modifier.height(320.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(job.results) { f ->
+                val r = f.result
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Beat.Card2)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        r?.bpm?.let { "%.1f".format(it) } ?: "–",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Beat.Violet,
+                        modifier = Modifier.width(76.dp),
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(f.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            when {
+                                r == null -> "Couldn't read this file"
+                                else -> listOfNotNull(
+                                    r.key?.let { "${it.name} · ${it.camelot}" },
+                                    clock(r.durationSec.toFloat()),
+                                    if (r.bpm == null) "no steady beat" else null,
+                                ).joinToString(" · ")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Beat.Muted,
+                        )
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (job.running) SmallAction("Stop", Modifier.weight(1f), onClick = onCancel)
+            else SmallAction("Clear", Modifier.weight(1f), onClick = onClear)
+            SmallAction("⬇ Export CSV", Modifier.weight(1.4f), enabled = job.results.isNotEmpty(), onClick = onExport)
+        }
+    }
+}
+
+/** Sends the tempo as MIDI clock, so drum machines, synths and DAW apps can play along. */
+@Composable
+private fun MidiCard(state: UiState, vm: BpmViewModel) {
+    Card {
+        val tempo = if (state.metronomeOn) state.metronomeBpm else state.bpm ?: state.tapBpm
+        SwitchRow(
+            "MIDI clock",
+            when {
+                !state.midiOn -> "Let other apps and MIDI gear follow the tempo"
+                tempo == null -> "Waiting for a tempo…"
+                else -> "Sending %.1f BPM".format(tempo)
+            },
+            state.midiOn,
+        ) { vm.toggleMidi() }
+        if (state.midiOn) {
+            Text(
+                "Apps on this phone can pick “BeatSense Clock” as a MIDI input.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Beat.Muted,
+            )
+            var open by remember { mutableStateOf(false) }
+            Box {
+                SmallAction(
+                    "🎹 " + (state.midiTarget?.name ?: "Also send to a USB/Bluetooth device…"),
+                    Modifier.fillMaxWidth(),
+                    active = state.midiTarget != null,
+                ) { vm.refreshMidiTargets(); open = true }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    if (state.midiTargets.isEmpty()) {
+                        DropdownMenuItem(text = { Text("No MIDI devices connected") }, onClick = { open = false }, enabled = false)
+                    }
+                    state.midiTargets.forEach { t ->
+                        DropdownMenuItem(text = { Text(t.name) }, onClick = { vm.connectMidi(t); open = false })
+                    }
+                    if (state.midiTarget != null) {
+                        DropdownMenuItem(text = { Text("Disconnect") }, onClick = { vm.connectMidi(null); open = false })
+                    }
                 }
             }
         }

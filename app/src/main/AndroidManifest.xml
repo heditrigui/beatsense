@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
+    <!-- MIDI clock output is optional: the app installs on phones without MIDI support too. -->
+    <uses-feature android:name="android.software.midi" android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -22,5 +24,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Lets other MIDI apps on the phone receive BeatSense's tempo as MIDI clock. -->
+        <service
+            android:name=".midi.ClockService"
+            android:exported="true"
+            android:permission="android.permission.BIND_MIDI_DEVICE_SERVICE">
+            <intent-filter>
+                <action android:name="android.media.midi.MidiDeviceService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.media.midi.MidiDeviceService"
+                android:resource="@xml/midi_device_info" />
+        </service>
     </application>
 </manifest>

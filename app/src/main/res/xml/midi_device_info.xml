@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- How BeatSense appears to other MIDI apps on the phone: one output that sends MIDI clock. -->
+<devices>
+    <device manufacturer="BeatSense" product="Clock">
+        <output-port name="Clock" />
+    </device>
+</devices>
