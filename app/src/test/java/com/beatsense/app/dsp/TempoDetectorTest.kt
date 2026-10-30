@@ -7,65 +7,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.exp
 import kotlin.math.sin
-import kotlin.random.Random
 
 /** Feeds synthetic songs with a known tempo through the detector, the same way the microphone does. */
 class TempoDetectorTest {
 
     private val rate = 44100
-
-    private enum class Hit { KICK, SNARE, HAT }
-
-    /** Renders a drum loop. [pattern] lists (position in beats within a 4-beat bar, instrument). */
-    private fun song(
-        bpm: Double,
-        seconds: Double,
-        pattern: List<Pair<Double, Hit>>,
-        jitterMs: Double = 0.0,
-        seed: Int = 1,
-    ): ShortArray {
-        val rnd = Random(seed)
-        val out = DoubleArray((seconds * rate).toInt())
-        val beat = 60.0 / bpm
-        var bar = 0
-        while (bar * 4 * beat < seconds) {
-            for ((pos, hit) in pattern) {
-                val t = (bar * 4 + pos) * beat + (rnd.nextDouble() * 2 - 1) * jitterMs / 1000
-                val start = (t * rate).toInt()
-                if (start < 0 || start >= out.size) continue
-                when (hit) {
-                    Hit.KICK -> for (i in 0 until (0.25 * rate).toInt()) {
-                        val tt = i.toDouble() / rate
-                        val f = 50 + 70 * exp(-tt * 30)
-                        if (start + i < out.size) out[start + i] += 0.8 * sin(2 * PI * f * tt) * exp(-tt * 14)
-                    }
-                    Hit.SNARE -> for (i in 0 until (0.18 * rate).toInt()) {
-                        val tt = i.toDouble() / rate
-                        val v = (rnd.nextDouble() * 2 - 1) * 0.45 + 0.2 * sin(2 * PI * 190 * tt)
-                        if (start + i < out.size) out[start + i] += v * exp(-tt * 22)
-                    }
-                    Hit.HAT -> {
-                        var prev = 0.0
-                        for (i in 0 until (0.05 * rate).toInt()) {
-                            val n = rnd.nextDouble() * 2 - 1
-                            if (start + i < out.size) out[start + i] += (n - prev) * 0.15 * exp(-i.toDouble() / rate * 70)
-                            prev = n
-                        }
-                    }
-                }
-            }
-            bar++
-        }
-        // A sustained bass/pad chord and room noise: sound that has no rhythm of its own.
-        for (i in out.indices) {
-            val t = i.toDouble() / rate
-            out[i] += 0.08 * sin(2 * PI * 55 * t) + 0.05 * sin(2 * PI * 220 * t) + 0.04 * sin(2 * PI * 330 * t)
-            out[i] += (rnd.nextDouble() * 2 - 1) * 0.02
-        }
-        return ShortArray(out.size) { (out[it].coerceIn(-1.0, 1.0) * 32767).toInt().toShort() }
-    }
 
     private fun detect(pcm: ShortArray, low: Double = 80.0, high: Double = 160.0): TempoDetector.Estimate? {
         val det = TempoDetector(rate)
@@ -84,19 +31,11 @@ class TempoDetectorTest {
         assertTrue("expected $expected ± $tolerance BPM but got $actual", abs(expected - actual) <= tolerance)
     }
 
-    private val house = listOf(
-        0.0 to Hit.KICK, 1.0 to Hit.KICK, 2.0 to Hit.KICK, 3.0 to Hit.KICK,
-        1.0 to Hit.SNARE, 3.0 to Hit.SNARE,
-        0.5 to Hit.HAT, 1.5 to Hit.HAT, 2.5 to Hit.HAT, 3.5 to Hit.HAT,
-    )
-    private val hipHop = listOf(
-        0.0 to Hit.KICK, 1.5 to Hit.KICK, 2.0 to Hit.KICK,
-        1.0 to Hit.SNARE, 3.0 to Hit.SNARE,
-    ) + (0 until 8).map { it * 0.5 to Hit.HAT }
-    private val dnb = listOf(
-        0.0 to Hit.KICK, 2.5 to Hit.KICK,
-        1.0 to Hit.SNARE, 3.0 to Hit.SNARE,
-    ) + (0 until 8).map { it * 0.5 to Hit.HAT }
+    private val house = TestAudio.house
+    private val hipHop = TestAudio.hipHop
+    private val dnb = TestAudio.dnb
+    private fun song(bpm: Double, seconds: Double, pattern: List<Pair<Double, TestAudio.Hit>>, jitterMs: Double = 0.0, seed: Int = 1) =
+        TestAudio.song(bpm, seconds, pattern, jitterMs, seed)
 
     @Test fun houseAt128() {
         val e = detect(song(128.0, 14.0, house))
@@ -125,7 +64,7 @@ class TempoDetectorTest {
     }
 
     @Test fun slowBallad() {
-        val ballad = listOf(0.0 to Hit.KICK, 2.0 to Hit.SNARE) + (0 until 4).map { it.toDouble() to Hit.HAT }
+        val ballad = listOf(0.0 to TestAudio.Hit.KICK, 2.0 to TestAudio.Hit.SNARE) + (0 until 4).map { it.toDouble() to TestAudio.Hit.HAT }
         val e = detect(song(72.0, 14.0, ballad), 60.0, 120.0)!!
         println("ballad 72 -> %.2f".format(e.bpm))
         assertTempo(72.0, e.bpm)
