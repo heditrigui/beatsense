@@ -1,6 +1,6 @@
 // Offline support: serve the app from the cache, and refresh the cache in the background.
-const CACHE = 'beatsense-v1';
-const FILES = ['./', 'index.html', 'tempo.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'beatsense-v2';
+const FILES = ['./', 'index.html', 'tempo.js', 'key.js', 'track.js', 'midi.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

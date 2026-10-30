@@ -41,6 +41,8 @@
   .badge { margin-top: 6px; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 99px; }
   .badge:empty { display: none; }
   #clarity { font-size: 11px; color: var(--muted); margin-top: 6px; min-height: 14px; }
+  #key { font-size: 15px; font-weight: 700; color: var(--cyan); min-height: 0; }
+  #key:empty { display: none; }
   #hint { text-align: center; color: var(--muted); min-height: 21px; margin-top: -6px; }
 
   .card { background: var(--card); border-radius: 20px; padding: 14px; }
@@ -67,6 +69,28 @@
          font-size: 18px; font-weight: 900; flex: none; transition: transform .06s; }
   .tap:active { transform: scale(.93); }
   .link { background: none; border: none; color: var(--violet); padding: 4px 0 0; font-size: 13px; }
+
+  .card h3 { margin: 0; font-size: 16px; font-weight: 600; }
+  .card p { margin: 4px 0 0; }
+  .card .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .card .buttons button, .card select { height: 44px; font-size: 13px; }
+  .switch { position: relative; width: 48px; height: 28px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .switch span { position: absolute; inset: 0; border-radius: 14px; background: var(--card2); cursor: pointer; transition: background .15s; }
+  .switch span::after { content: ''; position: absolute; left: 4px; top: 4px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+  .switch input:checked + span { background: var(--violet); }
+  .switch input:checked + span::after { transform: translateX(20px); background: #fff; }
+  .switch input:focus-visible + span { outline: 2px solid var(--cyan); }
+  #curve { width: 100%; height: 90px; display: block; margin-top: 10px; }
+  #curve-stats { margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .card select { width: 100%; margin-top: 10px; font: inherit; font-size: 13px; color: var(--text); background: var(--card2);
+                 border: 1px solid var(--card2); border-radius: 14px; padding: 0 12px; }
+  #files-show { margin-top: 8px; }
+  progress { width: 100%; height: 6px; accent-color: var(--violet); }
+  #files-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow: auto; }
+  #files-list li { display: flex; align-items: center; gap: 10px; background: var(--card2); border-radius: 16px; padding: 10px 12px; }
+  #files-list .fbpm { font-size: 22px; font-weight: 900; color: var(--violet); width: 70px; flex: none; font-variant-numeric: tabular-nums; }
+  #files-list .fname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   footer { text-align: center; font-size: 13px; color: var(--muted); }
   footer a { color: var(--violet); }
@@ -101,6 +125,7 @@
     <div class="center" id="dial-center">
       <div id="bpm" class="none">– –</div>
       <div class="bpm-label">BPM</div>
+      <div id="key"></div>
       <div class="badge" id="badge"></div>
       <div id="clarity"></div>
     </div>
@@ -114,6 +139,18 @@
       <div class="meter"><div id="level"></div></div>
     </div>
     <canvas id="viz" width="900" height="140"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="grow">
+        <h3>Tempo over time</h3>
+        <div class="muted small" id="keep-text">Turn on to keep listening past 45 s (live sets)</div>
+      </div>
+      <label class="switch" title="Keep listening"><input type="checkbox" id="keep" aria-label="Keep listening"><span></span></label>
+    </div>
+    <canvas id="curve" width="900" height="180" hidden></canvas>
+    <div class="muted small" id="curve-stats">Listen to see how the tempo moves over time.</div>
   </div>
 
   <div id="message"></div>
@@ -143,6 +180,29 @@
     <button class="tap" id="tap">TAP</button>
   </div>
 
+  <div class="card">
+    <h3>Analyse audio files</h3>
+    <p class="muted small">BPM and key of songs on your device. Pick a few files or a whole folder, then export the results as CSV. Files are analysed in your browser and never uploaded.</p>
+    <div class="buttons">
+      <button id="pick-files">🎵 Pick files</button>
+      <button id="pick-folder">📁 Folder</button>
+    </div>
+    <input type="file" id="file-input" accept="audio/*" multiple hidden>
+    <input type="file" id="folder-input" webkitdirectory multiple hidden>
+    <button class="link" id="files-show" hidden></button>
+  </div>
+
+  <div class="card" id="midi-card">
+    <div class="row">
+      <div class="grow">
+        <h3>MIDI clock</h3>
+        <div class="muted small" id="midi-text">Let other apps and MIDI gear follow the tempo</div>
+      </div>
+      <label class="switch" title="MIDI clock"><input type="checkbox" id="midi" aria-label="MIDI clock"><span></span></label>
+    </div>
+    <select id="midi-out" hidden aria-label="MIDI output"></select>
+  </div>
+
   <p class="muted small" style="text-align:center;margin:0">Tip: put the device 30 cm to 1 m from the speaker. Songs with drums lock in within about 6 seconds. Audio stays on your device: nothing is recorded or uploaded.</p>
 
   <footer id="footer">Also available as an Android app. Open source, MIT license.</footer>
@@ -166,10 +226,31 @@
   <div class="dialog-buttons"><button id="history-close">Close</button></div>
 </dialog>
 
+<dialog id="files-dialog">
+  <h3>Audio files</h3>
+  <div id="files-progress" hidden>
+    <div class="muted small" id="files-current" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+    <progress id="files-bar" max="1" value="0"></progress>
+  </div>
+  <ul id="files-list"></ul>
+  <div class="dialog-buttons">
+    <button id="files-stop">Stop</button>
+    <button id="files-export">⬇ Export CSV</button>
+    <button id="files-close">Close</button>
+  </div>
+</dialog>
+
 <script src="tempo.js"></script>
+<script src="key.js"></script>
+<script src="track.js"></script>
+<script src="midi.js"></script>
 <script>
 'use strict';
-const { TempoDetector, TapTempo, tempoName, genreHint, drumLoop, PATTERNS } = window.BeatSense;
+const {
+  TempoDetector, TapTempo, tempoName, genreHint, drumLoop, PATTERNS,
+  KeyDetector, chordTrack, keyName, camelot, TrackAnalyzer, downmix, toCsv,
+  ClockTimer, MIDI_CLOCK, MIDI_START, MIDI_STOP,
+} = window.BeatSense;
 const $ = (id) => document.getElementById(id);
 
 const RANGES = [
@@ -196,6 +277,10 @@ const state = {
   settle: 0,
   message: '',
   demoBpm: null,
+  demoKey: null,          // { tonic, minor } of the demo beat's chords
+  key: null,              // musical key heard so far, once it is clear enough to show
+  curve: [],              // tempo over time: [seconds since start, BPM shown]
+  keepListening: false,   // don't stop after 45 s (live sets, long mixes)
   history: loadHistory(),
 };
 const bpm = () => (state.detectedBpm == null ? null : state.detectedBpm * state.multiplier);
@@ -208,7 +293,7 @@ function audio() {
 
 // ---- Listening -------------------------------------------------------------
 
-let detector = null, stream = null, sourceNode = null, proc = null, loop = null, wakeLock = null;
+let detector = null, keyDetector = null, stream = null, sourceNode = null, proc = null, loop = null, wakeLock = null;
 let recent = [], startedAt = 0, quietSince = 0;
 
 async function start(source) {
@@ -240,6 +325,10 @@ async function start(source) {
     const [demoBpm, pattern] = choices[Math.floor(Math.random() * choices.length)];
     const seconds = (8 * 4 * 60) / demoBpm; // exactly 8 bars, so the loop point stays on the beat
     const samples = drumLoop({ bpm: demoBpm, seconds, rate: ac.sampleRate, pattern: PATTERNS[pattern], seed: demoBpm, pad: false });
+    // Chords in a hidden key too, so the key display has something to find.
+    const demoKey = { tonic: Math.floor(Math.random() * 12), minor: Math.random() < 0.5 };
+    chordTrack({ ...demoKey, bpm: demoBpm, seconds, rate: ac.sampleRate, out: samples });
+    state.demoKey = demoKey;
     const buffer = ac.createBuffer(1, samples.length, ac.sampleRate);
     buffer.copyToChannel(samples, 0);
     sourceNode = ac.createBufferSource();
@@ -253,19 +342,24 @@ async function start(source) {
   }
 
   detector = new TempoDetector(ac.sampleRate);
+  keyDetector = new KeyDetector(ac.sampleRate);
   proc = ac.createScriptProcessor(2048, 1, 1);
   const mute = ac.createGain();
   mute.gain.value = 0;
   sourceNode.connect(proc);
   proc.connect(mute).connect(ac.destination);
-  proc.onaudioprocess = (e) => detector.feed(e.inputBuffer.getChannelData(0));
+  proc.onaudioprocess = (e) => {
+    const samples = e.inputBuffer.getChannelData(0);
+    detector.feed(samples);
+    keyDetector.feed(samples);
+  };
 
   recent = [];
   startedAt = performance.now();
   quietSince = 0;
   Object.assign(state, {
     listening: true, source, detectedBpm: null, locked: false, settle: 0, confidence: 0, multiplier: 1,
-    envelope: [], message: source === 'mic' ? 'Listening… play some music' : 'Playing a demo beat. Can BeatSense find its tempo?',
+    envelope: [], key: null, curve: [], message: source === 'mic' ? 'Listening… play some music' : 'Playing a demo beat. Can BeatSense find its tempo?',
   });
   loop = setInterval(tick, 250);
   try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* not supported or not allowed */ }
@@ -296,14 +390,18 @@ function demoVerdict() {
   const b = bpm();
   if (state.demoBpm == null || b == null) return '';
   const off = Math.abs(b - state.demoBpm);
+  const k = state.demoKey && keyName(state.demoKey.tonic, state.demoKey.minor);
+  const keyRight = k && state.key?.name === k;
+  const keyNote = k && state.key && !keyRight ? ` Its key is ${k}; BeatSense heard ${state.key.name}.` : '';
   return off <= 1.5
-    ? `The demo beat is ${state.demoBpm} BPM: spot on.`
-    : `The demo beat is ${state.demoBpm} BPM; BeatSense heard ${Math.round(b)}. ${off > 20 ? 'Try ½× / 2× or another range.' : ''}`;
+    ? `The demo beat is ${state.demoBpm} BPM${keyRight ? ` in ${k}` : ''}: spot on.${keyNote}`
+    : `The demo beat is ${state.demoBpm} BPM${keyRight ? ` in ${k}` : ''}; BeatSense heard ${Math.round(b)}. ${off > 20 ? 'Try ½× / 2× or another range.' : ''}${keyNote}`;
 }
 
 /** Same smoothing and lock rules as the Android app's BpmViewModel.tick(). */
 function tick() {
   const est = detector.estimate(state.range.low, state.range.high);
+  const key = keyDetector.estimate();
   const env = detector.envelopeSnapshot();
   const level = detector.level;
   const now = performance.now();
@@ -331,6 +429,12 @@ function tick() {
   if (est && smoothed != null) state.beatAnchor = now - est.lastBeatAgoSec * 1000;
   if (smoothed != null) state.beatPeriod = 60 / smoothed;
   state.envelope = downsample(env, detector.framesPerSecond);
+  state.key = liveKey(key, state.key);
+  // One graph point a second; very long sessions keep every other point so the graph stays light.
+  if (smoothed != null && (!state.curve.length || elapsed - state.curve[state.curve.length - 1][0] >= 1)) {
+    state.curve.push([elapsed, smoothed * state.multiplier]);
+    if (state.curve.length > 3600) state.curve = state.curve.filter((_, i) => i % 2 === 0);
+  }
   state.message =
     tooQuiet ? 'Too quiet. Hold the device closer to the speaker.'
     : !est ? 'Listening… (needs about 4 seconds)'
@@ -339,9 +443,17 @@ function tick() {
     : 'Locking on…';
   if (locked && !wasLocked) navigator.vibrate?.(40);
 
-  // Plenty of time to settle; stop on our own to save battery.
-  if (elapsed > 45) stop();
+  // Plenty of time to settle; stop on our own to save battery, unless asked to keep going.
+  if (elapsed > 45 && !state.keepListening) stop();
   render();
+}
+
+/** Shows a key once it's clear, and keeps showing it while the music sits between chords. */
+function liveKey(now, shown) {
+  if (!now) return null;
+  if (now.confidence >= 0.3) return now;
+  if (shown && shown.tonic === now.tonic && shown.minor === now.minor) return shown;
+  return null;
 }
 
 /** The last ~4 seconds of onset strength, squeezed into bars for the visualiser. */
@@ -435,9 +547,167 @@ function persist() {
 function saveTempo(name) {
   const b = bpm() ?? state.tapBpm;
   if (b == null) return;
-  state.history.unshift({ id: Date.now(), bpm: Math.round(b * 10) / 10, name: name.trim(), time: Date.now() });
+  const key = state.key && bpm() != null ? `${state.key.name} · ${state.key.camelot}` : '';
+  state.history.unshift({ id: Date.now(), bpm: Math.round(b * 10) / 10, name: name.trim(), time: Date.now(), key });
   persist();
   renderHistory();
+}
+
+// ---- Audio files ---------------------------------------------------------------
+
+const files = { running: false, cancel: false, current: '', progress: 0, total: 0, results: [] };
+const AUDIO_EXT = /\.(mp3|m4a|aac|wav|wave|flac|ogg|oga|opus|webm|aif|aiff|caf|mp4)$/i;
+
+/** Decodes each file in the browser (nothing is uploaded) and adds a result as each one finishes. */
+async function analyseFiles(list) {
+  const picked = [...list].filter((f) => f.type.startsWith('audio/') || AUDIO_EXT.test(f.name))
+    .sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
+  if (!picked.length) { setMessage('No audio files there.'); return; }
+  if (files.running) files.cancel = true;
+  while (files.running) await new Promise((r) => setTimeout(r, 50));
+  Object.assign(files, { running: true, cancel: false, total: picked.length, results: [], progress: 0 });
+  $('files-dialog').showModal();
+  const range = state.range;
+  for (const file of picked) {
+    if (files.cancel) break;
+    files.current = file.webkitRelativePath || file.name;
+    files.progress = 0;
+    renderFiles();
+    let result = null;
+    try {
+      const decoded = await audio().decodeAudioData(await file.arrayBuffer());
+      const channels = Array.from({ length: decoded.numberOfChannels }, (_, i) => decoded.getChannelData(i));
+      const pcm = downmix(channels);
+      const a = new TrackAnalyzer(decoded.sampleRate, range.low, range.high);
+      // Work in slices and let the page breathe in between, so the progress bar moves.
+      const slice = decoded.sampleRate * 5;
+      for (let pos = 0; pos < pcm.length && !files.cancel; pos += slice) {
+        a.feed(pcm.subarray(pos, pos + slice));
+        files.progress = Math.min(1, (pos + slice) / pcm.length);
+        renderFiles();
+        await new Promise((r) => setTimeout(r, 0));
+      }
+      if (files.cancel) break;
+      result = a.result();
+    } catch { /* not a format this browser can decode */ }
+    files.results.push({ file: files.current, ...(result || { durationSec: null, bpm: null, key: null }), failed: !result });
+    renderFiles();
+  }
+  files.running = false;
+  renderFiles();
+}
+
+function renderFiles() {
+  $('files-progress').hidden = !files.running;
+  $('files-current').textContent = files.running ? `${files.results.length + 1} of ${files.total}: ${files.current}` : '';
+  $('files-bar').value = files.progress;
+  $('files-stop').hidden = !files.running;
+  $('files-export').disabled = !files.results.length;
+  const show = $('files-show');
+  show.hidden = !files.running && !files.results.length;
+  show.textContent = files.running ? `Analysing ${files.results.length + 1} of ${files.total}… · Show` : `${files.results.length} analysed · Show results`;
+  const list = $('files-list');
+  while (list.children.length > files.results.length) list.lastChild.remove();
+  for (const r of files.results.slice(list.children.length)) {
+    const li = document.createElement('li');
+    const n = document.createElement('div');
+    n.className = 'fbpm'; n.textContent = r.bpm == null ? '–' : r.bpm.toFixed(1);
+    const info = document.createElement('div');
+    info.className = 'grow'; info.style.minWidth = '0';
+    const name = document.createElement('div');
+    name.className = 'fname'; name.textContent = r.file;
+    const sub = document.createElement('div');
+    sub.className = 'muted small';
+    sub.textContent = r.failed ? 'Couldn’t read this file'
+      : [r.key && `${r.key.name} · ${r.key.camelot}`, clock(r.durationSec), r.bpm == null && 'no steady beat'].filter(Boolean).join(' · ');
+    info.append(name, sub);
+    li.append(n, info);
+    list.append(li);
+  }
+}
+
+function exportCsv() {
+  const blob = new Blob([toCsv(files.results)], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'beatsense-results.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ---- MIDI clock (Web MIDI: Chrome, Edge, Opera; Firefox with permission) ---------
+
+const midi = { access: null, on: false, out: null, timer: null, clock: new ClockTimer(), started: false };
+
+/** The tempo the clock follows: the metronome's, else the detected one, else the tapped one. */
+const midiTempo = () => (metro.on ? metro.bpm : bpm() ?? state.tapBpm);
+
+async function toggleMidi(on) {
+  if (!on) { stopMidi(); render(); return; }
+  try {
+    midi.access = midi.access || await navigator.requestMIDIAccess();
+  } catch {
+    setMessage('MIDI access was blocked. Allow it from the icon in the address bar.');
+    render();
+    return;
+  }
+  midi.access.onstatechange = () => render();
+  midi.on = true;
+  midi.started = false;
+  // Start on the next detected beat if there is one, so the receiver's bar lines up with the music.
+  const period = state.beatPeriod / state.multiplier;
+  const now = performance.now();
+  let first = now + 50;
+  if (!metro.on && state.listening && period > 0 && state.beatAnchor) {
+    const p = period * 1000;
+    first = now + (p - ((((now - state.beatAnchor) % p) + p) % p));
+  }
+  midi.clock.start(first);
+  midi.timer = setInterval(sendClock, 25);
+  render();
+}
+
+function stopMidi() {
+  if (midi.on && midi.started) midi.out?.send([MIDI_STOP]);
+  midi.on = false;
+  midi.clock.stop();
+  clearInterval(midi.timer);
+}
+
+// Clocks are sent up to 100 ms ahead with timestamps, so their spacing stays exact even when the page is busy.
+function sendClock() {
+  const out = midi.out;
+  const ticks = midi.clock.due(performance.now() + 100, midiTempo());
+  if (!out) return;
+  for (const t of ticks) {
+    if (!midi.started) { out.send([MIDI_START], t); midi.started = true; }
+    out.send([MIDI_CLOCK], t);
+  }
+}
+
+function renderMidi() {
+  const supported = !!navigator.requestMIDIAccess;
+  $('midi').disabled = !supported;
+  $('midi').checked = midi.on;
+  const sel = $('midi-out');
+  const outputs = midi.access ? [...midi.access.outputs.values()] : [];
+  if (midi.out && !outputs.includes(midi.out)) midi.out = null;
+  if (!midi.out && outputs.length) midi.out = outputs[0];
+  sel.hidden = !midi.on;
+  const ids = outputs.map((o) => o.id).join();
+  if (sel.dataset.ids !== ids) {
+    sel.dataset.ids = ids;
+    sel.innerHTML = '';
+    for (const o of outputs) sel.append(new Option(o.name, o.id));
+  }
+  if (midi.out) sel.value = midi.out.id;
+  const t = midiTempo();
+  $('midi-text').textContent =
+    !supported ? 'This browser has no Web MIDI. Try Chrome or Edge.'
+    : !midi.on ? 'Let other apps and MIDI gear follow the tempo'
+    : !outputs.length ? 'No MIDI outputs. Connect a device or start a virtual MIDI port.'
+    : t == null ? 'Waiting for a tempo…'
+    : `Sending ${t.toFixed(1)} BPM`;
 }
 
 // ---- Rendering -----------------------------------------------------------------
@@ -461,6 +731,7 @@ function render() {
   if (badges) { badge.style.color = badges[2]; badge.style.background = `color-mix(in srgb, ${badges[2]} 15%, transparent)`; }
   $('clarity').textContent = state.listening && b != null ? `Beat clarity ${Math.round(state.confidence * 100)}%` : '';
   $('hint').textContent = bpm() != null ? `${tempoName(bpm())} · ${genreHint(bpm())}` : '';
+  $('key').textContent = state.key && (state.listening || bpm() != null) ? `${state.key.name} · ${state.key.camelot}` : '';
 
   $('level').style.width = `${Math.round(Math.min(1, state.level) * 100)}%`;
   $('level').style.background = state.level > 0.9 ? 'var(--pink)' : 'var(--green)';
@@ -485,6 +756,47 @@ function render() {
     : state.tapCount > 0 ? 'Keep tapping…'
     : 'Tap along with the beat (or press T)';
   $('tap-reset').hidden = state.tapCount === 0;
+
+  $('keep').checked = state.keepListening;
+  $('keep-text').textContent = state.keepListening ? 'Keeps listening until you stop it' : 'Turn on to keep listening past 45 s (live sets)';
+  drawCurve();
+  renderMidi();
+}
+
+const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec) % 60).padStart(2, '0')}`;
+
+/** The tempo over the listening session, for live sets and songs that speed up or slow down. */
+function drawCurve() {
+  const c = $('curve'), pts = state.curve;
+  c.hidden = pts.length < 2;
+  if (pts.length < 2) {
+    $('curve-stats').textContent = state.listening ? 'The graph starts once a tempo is found.' : 'Listen to see how the tempo moves over time.';
+    return;
+  }
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  let lo = Infinity, hi = -Infinity, sum = 0;
+  for (const [, b] of pts) { lo = Math.min(lo, b); hi = Math.max(hi, b); sum += b; }
+  // At least ±4 BPM of headroom, so a steady song draws a calm flat line rather than magnified noise.
+  const mid = (lo + hi) / 2, span = Math.max(8, (hi - lo) * 1.2);
+  const t0 = pts[0][0], t1 = Math.max(pts[pts.length - 1][0], t0 + 1);
+  g.strokeStyle = '#211C2E';
+  g.lineWidth = 2;
+  for (const f of [0.25, 0.5, 0.75]) { g.beginPath(); g.moveTo(0, c.height * f); g.lineTo(c.width, c.height * f); g.stroke(); }
+  const grad = g.createLinearGradient(0, 0, c.width, 0);
+  grad.addColorStop(0, '#A77BFF');
+  grad.addColorStop(1, '#FF5C8A');
+  g.strokeStyle = grad;
+  g.lineWidth = 5;
+  g.lineJoin = g.lineCap = 'round';
+  g.beginPath();
+  pts.forEach(([t, b], i) => {
+    const x = ((t - t0) / (t1 - t0)) * c.width;
+    const y = c.height * (0.5 - (b - mid) / span);
+    if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+  });
+  g.stroke();
+  $('curve-stats').textContent = `${clock(t1 - t0)} · avg ${(sum / pts.length).toFixed(1)} · range ${Math.round(lo)}–${Math.round(hi)} BPM`;
 }
 
 function drawViz() {
@@ -565,7 +877,7 @@ function renderHistory() {
     const name = document.createElement('div');
     name.className = 'hname'; name.textContent = m.name || 'Untitled';
     const sub = document.createElement('div');
-    sub.className = 'muted small'; sub.textContent = `${tempoName(m.bpm)} · ${fmt.format(new Date(m.time))}`;
+    sub.className = 'muted small'; sub.textContent = [tempoName(m.bpm), m.key, fmt.format(new Date(m.time))].filter(Boolean).join(' · ');
     info.append(name, sub);
     const play = document.createElement('button');
     play.textContent = '▶'; play.title = 'Play metronome'; play.setAttribute('aria-label', 'Play metronome');
@@ -608,6 +920,22 @@ $('save-cancel').onclick = () => $('save-dialog').close('cancel');
 $('save-dialog').addEventListener('close', () => { if ($('save-dialog').returnValue === 'save') saveTempo($('save-name').value); });
 $('history-btn').onclick = () => { renderHistory(); $('history-dialog').showModal(); };
 $('history-close').onclick = () => $('history-dialog').close();
+$('keep').onchange = (e) => { state.keepListening = e.target.checked; render(); };
+$('pick-files').onclick = () => $('file-input').click();
+$('pick-folder').onclick = () => $('folder-input').click();
+$('file-input').onchange = (e) => { analyseFiles(e.target.files); e.target.value = ''; };
+$('folder-input').onchange = (e) => { analyseFiles(e.target.files); e.target.value = ''; };
+$('files-show').onclick = () => { renderFiles(); $('files-dialog').showModal(); };
+$('files-stop').onclick = () => { files.cancel = true; };
+$('files-export').onclick = exportCsv;
+$('files-close').onclick = () => $('files-dialog').close();
+$('midi').onchange = (e) => toggleMidi(e.target.checked);
+$('midi-out').onchange = (e) => {
+  const next = midi.access.outputs.get(e.target.value);
+  if (midi.started) { midi.out?.send([MIDI_STOP]); midi.started = false; }
+  midi.out = next;
+  render();
+};
 addEventListener('keydown', (e) => {
   if (e.target.matches('input') || e.repeat || document.querySelector('dialog[open]')) return;
   if (e.key === 't' || e.key === 'T') { e.preventDefault(); tap(); }
